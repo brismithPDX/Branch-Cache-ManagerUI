@@ -15,7 +15,7 @@ function Repair-Install{
         if(Test-Path $InstallDirectory){
             Write-Verbose "INFO: Repair installation : Removing Old Install Files"
             if(10 -eq $(Get-WindowsVersion)){
-                Remove-Item $InstallDirectory -Recurse -Force -Confirm $False
+                Remove-Item $InstallDirectory -Recurse -Force 
             }
             else{
                 Remove-Item $InstallDirectory -Recurse -Force
@@ -32,6 +32,8 @@ function Repair-Install{
 
             Write-Verbose "INFO: Repair installation : Removing Old Scheduled Tasks Compleated"
         }
+
+        Remove-StartMenuIcons
     
     }
     catch{
@@ -118,7 +120,7 @@ function Remove-ScheduledTasks {
         Write-Verbose "INFO: Remove-ScheduledTasks : Detecting Windows Version"
         if(10 -eq $(Get-WindowsVersion)){
             Write-Verbose "INFO: Remove-ScheduledTasks : Windows 10 Detected, Removing Scheduled Task"
-            Unregister-ScheduledTask -TaskName "Launch BranchCache Management UI" -Confirm $False
+            Unregister-ScheduledTask -TaskName "Launch_BranchCacheManager" -Confirm:$false
         }
         else{
             Write-Verbose "INFO: Remove-ScheduledTasks : Windows 7 Detected, Removing Scheduled Task"
@@ -137,7 +139,7 @@ function Get-WindowsVersion {
         $version = Get-WmiObject Win32_OperatingSystem | Select-Object -Property Version
         $version = $version.version.split("{.}")[0]
 
-        if(10 -ge $version){
+        if(6 -eq $version){
             Write-Verbose "INFO: Get-WindowsVersion : Windows 7 Detected"
             return 7
         }
@@ -152,6 +154,87 @@ function Get-WindowsVersion {
         return 7
     }
 }
+function Remove-StartMenuIcons{
+    Write-Verbose "INFO: Remove-StartMenuIcons has Started"
+    Write-Verbose "INFO: Remove-StartMenuIcons : Detecting Windows Version"
+    try{
+        if(10 -eq $(Get-WindowsVersion)){
+            Write-Verbose "INFO: Remove-StartMenuIcons : Windows 10 Detected, Removing Start Menu Icons"
+            
+            $List = Get-ChildItem C:\Users | where-object {$_.psiscontainer -eq "True"} | Select-Object name
+            
+            Foreach ($User in $List){
+                #fix this so that it will overwrite if needed or create a removeal version for the reapir function
+
+                $UserName = $User.name
+
+                $Path = "C:\Users\$UserName\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
+                
+                $test = test-path -Path "$Path\Check Scanner Mode Utility.lnk"
+                
+                if($test){
+                    Remove-Item -Path "$Path\Check Scanner Mode Utility.lnk" -Force
+                }
+            }
+        }
+        else{
+
+            Write-Verbose "INFO: Remove-StartMenuIcons : Windows 7 Detected, Removing Start Menu Icons"
+            #code to install start menu icon on windows 7
+            $Path = "C:\ProgramData\Microsoft\Windows\Start Menu"
+
+            $test = test-path -Path "$Path\Check Scanner Mode Utility.lnk"
+                
+            if($test){
+                Remove-Item -Path "$Path\Check Scanner Mode Utility.lnk" -Force
+            }
+            
+        }
+        
+        Write-Verbose "INFO: Remove-StartMenuIcons has Compleated"
+    }
+    catch{
+        Write-Verbose "ERROR: Unable to Remove-StartMenuIcons"
+        throw "ERROR: Unable to Remove-StartMenuIcons - $PSItem"
+    }
+}
+# We dont use the install Start Menu icons because it does not load the system try icon as expected.
+#   This issue does no occour when launched via shceduled task durring logon though.
+function Install-StartMenuIcons{
+    Write-Verbose "INFO: Install-StartMenuIcons has Started"
+    Write-Verbose "INFO: Install-StartMenuIcons : Detecting Windows Version"
+    try{
+        if(10 -eq $(Get-WindowsVersion)){
+            Write-Verbose "INFO: Install-StartMenuIcons : Windows 10 Detected, Installing Start Menu Icons"
+            
+            $List = Get-ChildItem C:\Users | where-object {$_.psiscontainer -eq "True"} | Select-Object name
+            
+            Foreach ($User in $List){
+                
+                $UserName = $User.name
+
+                $Path = "C:\Users\$UserName\AppData\Roaming\Microsoft\Windows\Start Menu\Programs"
+                
+                robocopy . $Path 'Check Scanner Mode Utility.lnk'
+            }
+        }
+        else{
+
+            Write-Verbose "INFO: Install-StartMenuIcons : Windows 7 Detected, Installing Start Menu Icons"
+            #code to install start menu icon on windows 7
+            $Path = "C:\ProgramData\Microsoft\Windows\Start Menu"
+
+            robocopy . $Path 'Check Scanner Mode Utility.lnk'
+            
+        }
+        Write-Verbose "INFO: Install-StartMenuIcons has Compleated"
+    }
+    catch{
+        Write-Verbose "ERROR: Unable to Install-StartMenuIcons"
+        throw "ERROR: Unable to Install-StartMenuIcons"
+    }
+}
+
 
 Write-Verbose "INFO: Starting Installation"
 
@@ -161,11 +244,13 @@ try{
 }
 catch{
     if($VerbosePreference -eq "SilentlyContinue"){
-        [System.Envrioment]::Exit(2600)
+        [System.Environment]::Exit(2600)
     }
     else{
         Write-Error $PSItem
+        return
     }
+    
 }
 
 Write-Verbose "INFO: Installation Compleated"
